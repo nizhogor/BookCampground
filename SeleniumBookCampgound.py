@@ -1,8 +1,11 @@
 '''
 This script is designed to check availability of campgrounds for a range of dates.
-Writes available campgrounds to a file or/and sounds alarm if something is found.
+It writes available campgrounds and dates to a file or/and sounds alarm if something is found.
+If site's interface is changed, script needs to be adjusted for a new page layout.
+
 Mikhail Rogozhin 2016
 license: http://unlicense.org/
+Python 3.4
 '''
 
 from selenium import webdriver
@@ -12,12 +15,13 @@ import re
 import argparse
 import time
 from datetime import date
+from datetime import datetime
 from calendar import monthrange
 import sys
 
-#reservable campgrounds can be found by searching for national park name here
-#http://www.recreation.gov/
-#mark important campground or park's name with * for an audio alert
+# reservable campgrounds can be found by searching for national park name here
+# http://www.recreation.gov/
+# mark important campground or park's name with * for an audio alert
 
 Glacier = {
     'many glacier': 'http://www.recreation.gov/unifSearchInterface.do?interface=camping&contractCode=NRSO&parkId=136190',
@@ -32,10 +36,10 @@ Yosemite = {
     'bridalveil creek': 'http://www.recreation.gov/camping/bridalveil-creek-group-and-horse-camp/r/campgroundDetails.do?contractCode=NRSO&parkId=70931',
     'wawona': 'http://www.recreation.gov/camping/wawona/r/campgroundDetails.do?contractCode=NRSO&parkId=70924',
     'crane flat': 'http://www.recreation.gov/camping/crane-flat/r/campgroundDetails.do?contractCode=NRSO&parkId=70930',
-    #'crystal springs(south)':
-    #'http://www.recreation.gov/camping/crystal-springs-campground-midsized-group-sites/r/campgroundDetails.do?contractCode=NRSO&parkId=72486',
-    #'limestone(outside)':
-    #'http://www.recreation.gov/camping/limestone-campground/r/campgroundDetails.do?contractCode=NRSO&parkId=123440'
+    # 'crystal springs(south)':
+    # 'http://www.recreation.gov/camping/crystal-springs-campground-midsized-group-sites/r/campgroundDetails.do?contractCode=NRSO&parkId=72486',
+    # 'limestone(outside)':
+    # 'http://www.recreation.gov/camping/limestone-campground/r/campgroundDetails.do?contractCode=NRSO&parkId=123440'
     'hodgdon meadow': 'http://www.recreation.gov/camping/hodgdon-meadow/r/campgroundDetails.do?contractCode=NRSO&parkId=70929'
     }
 
@@ -83,8 +87,8 @@ Canyonlands = {
 Arches = {
     'devils garden': 'http://www.recreation.gov/unifSearchInterface.do?interface=camping&contractCode=NRSO&parkId=74066',
     'goose island group': 'http://www.recreation.gov/unifSearchInterface.do?interface=camping&contractCode=NRSO&parkId=75835',
-    #'oak grove':
-    #'http://www.recreation.gov/unifSearchInterface.do?interface=%2FrecreationalAreaDetails.do&contractCode=NRSO&parkId=202159&facilityId=202159&agencyCode=70901\'
+    # 'oak grove':
+    # 'http://www.recreation.gov/unifSearchInterface.do?interface=%2FrecreationalAreaDetails.do&contractCode=NRSO&parkId=202159&facilityId=202159&agencyCode=70901\'
     'the ledge group': 'http://www.recreation.gov/unifSearchInterface.do?interface=camping&contractCode=NRSO&parkId=75832',
     'kens lake group': 'http://www.recreation.gov/unifSearchInterface.do?interface=camping&contractCode=NRSO&parkId=75838',
     'horsethief group': 'http://www.recreation.gov/unifSearchInterface.do?interface=camping&contractCode=NRSO&parkId=75837',
@@ -93,17 +97,17 @@ Arches = {
     'onion creek': 'http://www.recreation.gov/unifSearchInterface.do?interface=camping&contractCode=NRSO&parkId=75834'
     }
 
-#marking with * triggers bell when campsite is found
+# marking with * triggers bell when campsite is found
 parks = {
     'Yosemite*': Yosemite,
-    'Sequoia':Sequoia,
-    'Grand Canyon': GrandCanyon,
-    'Zion': Zion,
-    'Bryce': Bryce,
-    'CapitolReef': CapitolReef,
-    'Canyonlands': Canyonlands,
-    'Arches': Arches,
-    'Glacier': Glacier
+    'Sequoia*': Sequoia,
+    'Grand Canyon*': GrandCanyon,
+  #  'Zion': Zion,
+  #  'Bryce': Bryce,
+  #  'CapitolReef': CapitolReef,
+  #  'Canyonlands': Canyonlands,
+  #  'Arches': Arches,
+  #  'Glacier': Glacier
     }
 
 def click(browser, element):
@@ -137,8 +141,40 @@ def sound_alarm(N):
 
 def really_want_this_one(name):
     return name.find('*') != -1
+
+def print_dates(dates):
+    i = 1
+    for date in dates:
+        print(date.rjust(10), end = " ")
+        if (i % 7 == 0):
+            print()
+        i += 1
+    print('\n')
+
+def mark_all_parks():
+    for park in list(parks):
+        if (not really_want_this_one(park)):
+            parks[park + "*"] = parks.pop(park)
+
+def find_dates_available(browser, flexibility):
+    if (flexibility != 0):
+        date_elements = browser.find_elements_by_link_text("A")
+        for element in date_elements:
+            link = element.get_attribute("href")
+            found = re.search('[0-9]+/[0-9]+/[0-9]+', link)
+            if (found):
+                available = found.group()
+                available_dates.add(available)
+    list = sorted(available_dates, key = lambda x: datetime.strptime(x, "%m/%d/%Y"))
+    if (flexibility == 4): # check next 2 weeks
+        next = browser.find_element_by_link_text("Next 2 weeks >")
+        click(browser, next)
+        list += find_dates_available(browser, 2)
+    return list
     
 if __name__ == "__main__":
+    mark_all_parks()
+
     args_dict = process_args()
     start_day = args_dict['start_day']
     start_month = args_dict['start_month']
@@ -152,11 +188,11 @@ if __name__ == "__main__":
     if (start_day > days_in_month):
         start_day = days_in_month
     if (start_month - today_month < 0):
-        raise ValueError("start_month shouldn't be in the past") #winter camping is never packed anyways, ignoring January booking
+        raise ValueError("start_month shouldn't be in the past") # winter camping is never packed anyways, ignoring January booking
 
     browser = webdriver.Chrome()
     browser.maximize_window()
-    browser.implicitly_wait(10)
+    browser.implicitly_wait(1)
     i = 0
     while True:
         filename = args_dict['filename'] + '_' + str(start_month) + '_' + str(start_day) + '.txt'
@@ -166,18 +202,19 @@ if __name__ == "__main__":
             for campground, url in campgrounds.items():
                 try:
                     browser.get(url)
-                    #each element's id/name/xpath can be found by looking at
-                    #page's source
+                    # each element's id/name/xpath can be found by looking at
+                    # page's source
                     sel = Select(browser.find_element_by_id('flexDates'))
-                    #flexibility: [1] = flexible within 2 weeks; [2] = 4 weeks
-                    if (args_dict['flexibility_weeks'] == 4):
+                    # flexibility: [1] = flexible within 2 weeks; [2] = 4 weeks
+                    flexibility = args_dict['flexibility_weeks']
+                    if (flexibility == 4):
                         sel.select_by_index(2)
-                    elif (args_dict['flexibility_weeks'] == 2):
+                    elif (flexibility == 2):
                         sel.select_by_index(1)
                     else:
                         sel.select_by_index(0)
 
-                    #pick a date
+                    # pick a date
                     click_element_by_id(browser, 'arrivalDate')
                     calendar = browser.find_element_by_id('popupCalendar')
                     browser.switch_to.frame(calendar)
@@ -185,17 +222,22 @@ if __name__ == "__main__":
                     while(start_month - today_month_cpy > 0):
                         click_element_by_id(browser, 'nextmonth')
                         today_month_cpy += 1
-                    click(browser, browser.find_element_by_link_text(str(start_day))) #pick arrival date.
+                    dates = browser.find_elements_by_link_text(str(start_day)) # could have one extra from previous month, like 30th
+                    click(browser, dates[1]) # pick arrival date.
                     browser.switch_to.default_content()
 
-                    #search
+                    # search
                     click_element_by_id(browser, 'filter')
                     spots = spots_available(browser)
                     if (spots != '0'):
+                        # find dates available
+                        dates_available = find_dates_available(browser, flexibility)                                              
                         print("\t" + campground + ": " + spots, file = f, flush = True)
                         if ((really_want_this_one(campground) or really_want_this_one(park)) and not args_dict['silent']):
                             sound_alarm(3)
-                            print("found camp for one of the *s")
+                            print("found {0} campground: {1}({2})".format(park, campground, spots), flush = True)
+                            print(url, flush = True)
+                            print_dates(dates_available)
                 except KeyboardInterrupt: # Ctrl + C to stop
                     print("Exiting")
                     browser.quit()
@@ -204,7 +246,8 @@ if __name__ == "__main__":
                     print(type(problem), file = f)
                     print("for " + park + " " + campground + ": " + url, file = f)
                     print(problem, file = f)
+                    print(problem, flush = True)
         print("finished check #"+str(i), time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
         i += 1
-        time.sleep(60) #wait 60 sec after each run
+        time.sleep(60) # wait 60 sec after each run
     
