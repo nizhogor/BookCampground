@@ -157,6 +157,7 @@ def mark_all_parks():
             parks[park + "*"] = parks.pop(park)
 
 def find_dates_available(browser, flexibility):
+    available_dates = set()
     if (flexibility != 0):
         date_elements = browser.find_elements_by_link_text("A")
         for element in date_elements:
